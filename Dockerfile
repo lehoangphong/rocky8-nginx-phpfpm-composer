@@ -1,73 +1,54 @@
-# Sử dụng hình ảnh Rocky Linux 8
+# Use Rocky Linux 8 image
 FROM rockylinux/rockylinux:8
 
-# Cài đặt các gói cần thiết
+# Install necessary packages
 RUN dnf makecache && \
     dnf install -y epel-release && \
     dnf install -y nginx php php-fpm php-json php-opcache php-mbstring php-pdo unzip --setopt=tsflags=nodocs --setopt=install_weak_deps=false --nogpgcheck && \
     dnf clean all
 
-# Sao chép tệp cấu hình Nginx vào đúng vị trí
+# Copy the Nginx configuration file to the correct location
 COPY /apps/.bf-config/nginx/nginx.conf /etc/nginx/nginx.conf
 
-# Sao chép tệp cấu hình PHP-FPM
+# Copy the PHP-FPM configuration file
 COPY /apps/.bf-config/php/conf.d/php-fpm.conf /etc/php-fpm.d/www.conf
 
-# Sao chép tệp cấu hình php.ini
+# Copy the php.ini configuration file
 COPY /apps/.bf-config/php/php.ini /etc/php.ini
 
-# Cài đặt Composer bằng PHP
-# RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" && \
-#     php composer-setup.php --install-dir=/usr/bin --filename=composer && \
-#     php -r "unlink('composer-setup.php')"
-# RUN php -r "copy('https://getcomposer.org/download/', 'composer-setup.php');" && \
-#     php composer-setup.php --install-dir=/usr/bin --filename=composer --quiet && \
-#     php -r "unlink('composer-setup.php')"
-# Cài đặt Composer
+# Install Composer
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
-# Tạo thư mục làm việc
+# Create the working directory
 WORKDIR /home/vcap/app
 
-# Sao chép thư mục composer và sao chép dependencies bằng Composer
+# Copy the composer folder and copy dependencies using Composer
 COPY /apps/composer.json .
 
+# create the source code folder
 RUN mkdir -p /home/vcap/app/y/share/manpower/phpmailer && \
     mkdir -p /home/vcap/app/y/share/htdocs/ && \
     mkdir -p /home/vcap/app/y/share/controller/ && \
     mkdir -p /home/vcap/app/y/share/manpower/ && \
-    mkdir -p /home/vcap/app/y/share/manpower/phpmailer
+    mkdir -p /home/vcap/app/y/share/manpower/phpmailer && \
+    mkdir -p /var/run/php-fpm/ && \
+    chmod -R 755 /var/run/php-fpm/
 
-# Sao chép mã nguồn ứng dụng vào thư mục làm việc
+# Copy the application source code to the working directory
 COPY web /home/vcap/app/y/share/htdocs/
 COPY src /home/vcap/app/y/share/controller
 COPY common /home/vcap/app/y/share/manpower
 
-# Cài đặt dependencies và sao chép dữ liệu cùng một lần
+# Install dependencies and copy data at once
 RUN composer install --ignore-platform-reqs --no-interaction --no-plugins --no-scripts --verbose \
-    && ls -la \
-    # && cp -r web/* /y/share/htdocs/ \
-    # && cp -r src /y/share/controller \
-    # && cp -r common /y/share/manpower \
     && cp -r /home/vcap/app/vendor/phpmailer /home/vcap/app/y/share/manpower/phpmailer
-
-# # # Cài đặt dependencies bằng Composer
-# RUN composer install --ignore-platform-reqs --no-interaction --no-plugins --no-scripts --verbose
-
-# # # Sao chép thư mục phpmailer từ thư mục vendor vào /y/share/manpower/phpmailer
-# COPY  /home/vcap/app/vendor/phpmailer /y/share/manpower/phpmailer
-
-# Cài đặt dependencies bằng Composer
-# COPY composer.json /y/share/manpower/composer.json
-# COPY composer.lock /y/share/manpower/composer.lock
-# RUN cd /y/share/manpower && composer install --no-plugins --no-scripts --no-interaction
 
 # create folder container php-fpm.sock
 RUN mkdir -p /var/run/php-fpm/ && \
     chmod -R 755 /var/run/php-fpm/
 
-# Expose cổng 80 để truy cập Nginx
+# Expose port 80 to access Nginx
 EXPOSE 80
 
-# Khởi động Nginx và PHP-FPM khi container được chạy
+# Start Nginx and PHP-FPM when the container is launched
 CMD php-fpm && nginx -g "daemon off;"
